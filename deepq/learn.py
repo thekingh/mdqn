@@ -15,8 +15,9 @@ import torch.nn as nn
 import torch.autograd as autograd
 import torch.nn.functional as F
 
-from .replay_buffer import ReplayBuffer
+import pickle
 
+from .replay_buffer import ReplayBuffer
 
 # detect GPU
 USE_CUDA = torch.cuda.is_available()
@@ -90,7 +91,7 @@ def mario_learning(
     
     # Check & load pretrain model
     if os.path.isfile('mario_Q_params.pkl'):
-        print('Load Q parametets ...')
+        print('Load Q parameters ...')
         Q.load_state_dict(torch.load('mario_Q_params.pkl'))
         
     if os.path.isfile('mario_target_Q_params.pkl'):
@@ -109,19 +110,23 @@ def mario_learning(
     mean_episode_reward = -float('nan')
     best_mean_episode_reward = -float('inf')
     last_obs = env.reset()
-    LOG_EVERY_N_STEPS = 10000
+    LOG_EVERY_N_STEPS = 10000 #TODO change back
     
+    num_trials = 0
+    loss_arr = []
+    reward_arr = []
+    trial_progress = []
+    LEVEL_WIN_DIST = 3266
     
     for t in count():
 
         if t % 1000 == 0:
-            print('timestep:', t)
+            print('Timestep:', t)
 
         ### Step the env and store the transition
         last_idx = replay_buffer.store_frame(last_obs)
 
         recent_observations = replay_buffer.encode_recent_observation()
-        
         
         if t > learning_starts:
             action = select_epilson_greedy_action(Q, recent_observations, t)[0]
@@ -138,7 +143,12 @@ def mario_learning(
         
         if done:
             obs = env.reset()
-            print("done, resetting -- x: ", _info['x_pos'])
+            num_trials += 1
+            x_pos = _info['x_pos']
+            percent_done = (x_pos / LEVEL_WIN_DIST) * 100.
+            trial_progress.append(x_pos)
+            print("Completed trial {0} @ [{1}/{2}]({3:.2f}%)".format(num_trials, x_pos, LEVEL_WIN_DIST, percent_done))
+
         last_obs = obs
         
         if (t > learning_starts and t % learning_freq == 0 and replay_buffer.can_sample(batch_size)):
@@ -148,14 +158,13 @@ def mario_learning(
             act_batch = Variable(torch.from_numpy(act_batch).long())
             rew_batch = Variable(torch.from_numpy(rew_batch))
             next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype) / 255.0)
-            not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype) # 如果下一個state是episode中的最後一個，則done_mask = 1
+            not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype) 
             
             if USE_CUDA:
                 act_batch = act_batch.cuda()
                 rew_batch = rew_batch.cuda()
                 
-            # 從抽出的batch observation中得出現在的Q值
-            current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1))
+            current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1)).squeeze(1)
             next_max_q = target_Q(next_obs_batch).detach().max(1)[0]
             next_Q_values = not_done_mask * next_max_q
 
@@ -167,12 +176,14 @@ def mario_learning(
             # clip the bellman error between [-1, 1]
             clipped_bellman_error = bellman_error.clamp(-1, 1)
             # * -1 gradient，why?
-            d_error = torch.tensor(clipped_bellman_error * -1.0)
+            d_error = clipped_bellman_error * -1.0
+
+            if t % 1000 == 0:
+                loss_arr.append(d_error.mean())
 
             # backward & update
             optimizer.zero_grad()
-            # TODO NICK WHY DOES THIS WORK
-            current_Q_values.backward(d_error[0].data.unsqueeze(1))
+            current_Q_values.backward(d_error.data)
             
             optimizer.step()
             num_param_updates += 1
@@ -183,7 +194,8 @@ def mario_learning(
         ### Log & track
         episode_rewards = env.get_episode_rewards()
         if len(episode_rewards) > 0:
-            mean_episode_reward = np.mean(episode_rewards[-100:]) # 最近100次reward的平均
+            mean_episode_reward = np.mean(episode_rewards[-100:]) 
+
         if len(episode_rewards) > 100:
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
             
@@ -193,8 +205,20 @@ def mario_learning(
             print("best mean reward %f" % best_mean_episode_reward)
             print("episodes %d" % len(episode_rewards))
             print("exploration %f" % exploration.value(t))
+            
+            reward_arr.append(mean_episode_reward)
+
             sys.stdout.flush()
             
             # Save the trained model
             torch.save(Q.state_dict(), 'mario_Q_params.pkl')
             torch.save(target_Q.state_dict(), 'mario_target_Q_params.pkl')
+
+            with open('statistics/trial_progress.pkl', 'wb') as f:
+                pickle.dump(trial_progress, f)
+
+            with open('statistics/loss_arr.pkl', 'wb') as f:
+                pickle.dump(loss_arr, f)
+
+            with open('statistics/reward_arr.pkl', 'wb') as f:
+                pickle.dump(reward_arr, f)

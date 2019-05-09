@@ -21,10 +21,10 @@ SEED = 12345
 BATCH_SIZE = 32
 GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 1000000
-LEARNING_STARTS = 50000
-LEARNING_FREQ  = 4
-FRAME_HISTORY_LEN = 4
-TARGET_UPDATE_FREQ = 10000
+LEARNING_STARTS    = 50000
+LEARNING_FREQ      = 4 
+FRAME_HISTORY_LEN  = 4
+TARGET_UPDATE_FREQ = 5000
 LEARNING_RATE = 0.00025
 ALPHA = 0.95
 EPS = 0.01
@@ -57,7 +57,7 @@ def main(env):
 
 if __name__ == '__main__':
     
-    env = gym_super_mario_bros.make('SuperMarioBros-v3')
+    env = gym_super_mario_bros.make('SuperMarioBros-1-1-v0')
     env = BinarySpaceToDiscreteSpaceEnv(env, COMPLEX_MOVEMENT)
 
     env.seed(SEED)
@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     env = wrap_mario(env)
 
-    output_dir = 'video/mario'
+    output_dir = 'video/baseline'
     env = wrappers.Monitor(env, output_dir, force=True, video_callable=lambda count: count % 10 == 0)
 
     main(env)
