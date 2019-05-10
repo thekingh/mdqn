@@ -37,6 +37,7 @@ class Variable(autograd.Variable):
 def mario_learning(
     env,
     q_func,
+    model,
     optimizer_spec,
     exploration,
     replay_buffer_size=1000000,
@@ -45,7 +46,7 @@ def mario_learning(
     learning_starts=50000,
     learning_freq=4,
     frame_history_len=4,
-    target_update_freq=10000
+    target_update_freq=10000,
     ):
     
     assert type(env.observation_space) == gym.spaces.Box
@@ -63,13 +64,20 @@ def mario_learning(
     num_actions = len(COMPLEX_MOVEMENT)
     
     # Construct an epilson greedy policy with given exploration schedule
-    def select_epilson_greedy_action(model, obs, t):
+    def select_epilson_greedy_action(model, act_hot, obs, last_obs, t):
         sample = random.random()
         eps_threshold = exploration.value(t)
         if sample > eps_threshold:
             obs = torch.from_numpy(obs).type(dtype).unsqueeze(0) / 255.0
-            with torch.no_grad():
-                return model(Variable(obs)).data.max(1)[1].cpu()
+            act_hot = torch.from_numpy(act_hot).type(dtype).unsqueeze(0)
+            last_obs = torch.from_numpy(last_obs).type(dtype)
+
+            if type(model).__name__ == "DQN":
+                with torch.no_grad():
+                    return model(Variable(obs)).data.max(1)[1].cpu()
+            else:
+                with torch.no_grad():
+                    return model(Variable(act_hot), Variable(obs), Variable(last_obs)).data.max(1)[1].cpu()
         else:
             return torch.IntTensor([[random.randrange(num_actions)]])
         
@@ -78,7 +86,8 @@ def mario_learning(
         action = action % num_actions
         if action == 0:
             # Move right while jumping
-            action_onehot = np.array([0, 0, 0, 1, 1, 0])
+            action_onehot = np.zeros(num_actions, dtype=int)
+            action_onehot[2] = 1
         else:
             action_onehot = np.zeros(num_actions, dtype=int)
             action_onehot[action] = 1
@@ -103,7 +112,7 @@ def mario_learning(
     optimizer = optimizer_spec.constructor(Q.parameters(), **optimizer_spec.kwargs)
     
     # Construct the replay buffer
-    replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len)
+    replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len, num_actions)
     
     ### RUN ENV
     num_param_updates = 0
@@ -127,19 +136,23 @@ def mario_learning(
         last_idx = replay_buffer.store_frame(last_obs)
 
         recent_observations = replay_buffer.encode_recent_observation()
-        
+
+        recent_hot_actions = replay_buffer.encode_recent_hot_actions()
+
+
         if t > learning_starts:
-            action = select_epilson_greedy_action(Q, recent_observations, t)[0]
+            action = select_epilson_greedy_action(Q, recent_hot_actions, recent_observations, last_obs, t)[0]
         else:
             action = random.randrange(num_actions)
             
         # one hot encoding
         act_onehot = to_onehot(action, num_actions)
+        replay_buffer.store_hot_action(last_idx, act_onehot)
 
         obs, reward, done, _info = env.step(act_onehot)
         #reward = max(-1.0, min(reward, 1.0))
 
-        replay_buffer.store_effect(last_idx, action, reward, done) # 將新的資訊存入buffer中
+        replay_buffer.store_effect(last_idx, action, reward, done)
         
         if done:
             obs = env.reset()
@@ -152,20 +165,31 @@ def mario_learning(
         last_obs = obs
         
         if (t > learning_starts and t % learning_freq == 0 and replay_buffer.can_sample(batch_size)):
-            obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
-            
+            obs_batch, act_batch, rew_batch, next_obs_batch, done_mask, hot_act_batch, next_hot_act_batch = replay_buffer.sample(batch_size)
             obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype) / 255.0)
             act_batch = Variable(torch.from_numpy(act_batch).long())
             rew_batch = Variable(torch.from_numpy(rew_batch))
             next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype) / 255.0)
-            not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype) 
-            
+
+            not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype)
+            hot_act_batch = Variable(torch.from_numpy(hot_act_batch)).type(dtype)
+            next_hot_act_batch = Variable(torch.from_numpy(next_hot_act_batch)).type(dtype)
+
+
+            last_obs_reshape = last_obs.reshape(-1, 84, 84)
+            last_obs_batch = np.concatenate([last_obs_reshape.copy() for i in range(batch_size)], 0)
+            last_obs_batch = Variable(torch.from_numpy(last_obs_batch)).type(dtype)
             if USE_CUDA:
                 act_batch = act_batch.cuda()
                 rew_batch = rew_batch.cuda()
-                
-            current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1)).squeeze(1)
-            next_max_q = target_Q(next_obs_batch).detach().max(1)[0]
+
+            if model == "DQN":
+                current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1)).squeeze(1)
+                next_max_q = target_Q(next_obs_batch).detach().max(1)[0]
+            else:
+                current_Q_values = Q(hot_act_batch, obs_batch, last_obs_batch).gather(1, act_batch.unsqueeze(1)).squeeze(1)
+                next_max_q = target_Q(next_hot_act_batch, next_obs_batch, last_obs_batch).detach().max(1)[0]
+
             next_Q_values = not_done_mask * next_max_q
 
             # TD value
