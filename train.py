@@ -13,9 +13,12 @@ import torch.optim as optim
 
 from deepq.learn import mario_learning
 from deepq.model import DQN
+from deepq.robust_model import RobustDQN
 
 from common.atari_wrapper import wrap_mario
 from common.schedule import LinearSchedule
+
+import argparse
 
 SEED = 12345
 BATCH_SIZE = 32
@@ -29,7 +32,7 @@ LEARNING_RATE = 0.00025
 ALPHA = 0.95
 EPS = 0.01
 
-def main(env):
+def main(env, net):
     
     num_iterations = float(40000000) / 4.0
 
@@ -41,9 +44,18 @@ def main(env):
         kwargs=dict(lr=LEARNING_RATE, alpha=ALPHA, eps=EPS),
     )
 
+    if net == "DQN":
+        q_func = DQN
+        model = "DQN"
+    else:
+        q_func = RobustDQN
+        model = "RobustDQN"
+
+
     mario_learning(
         env=env,
-        q_func=DQN,
+        q_func= q_func,
+        model= model,
         optimizer_spec=optimizer,
         exploration=exploration_schedule,
         replay_buffer_size=REPLAY_BUFFER_SIZE,
@@ -56,8 +68,12 @@ def main(env):
     )
 
 if __name__ == '__main__':
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--net', default='DQN', help='Select the net to use: DQN or RobustDQN')
+    args = parser.parse_args()
+
     env = gym_super_mario_bros.make('SuperMarioBros-1-1-v0')
+
     env = BinarySpaceToDiscreteSpaceEnv(env, COMPLEX_MOVEMENT)
 
     env.seed(SEED)
@@ -69,6 +85,6 @@ if __name__ == '__main__':
     output_dir = 'video/baseline'
     env = wrappers.Monitor(env, output_dir, force=True, video_callable=lambda count: count % 10 == 0)
 
-    main(env)
+    main(env, args.net)
 
 
