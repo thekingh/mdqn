@@ -152,7 +152,7 @@ def mario_learning(
         obs, reward, done, _info = env.step(act_onehot)
         #reward = max(-1.0, min(reward, 1.0))
 
-        replay_buffer.store_effect(last_idx, action, reward, done) # 將新的資訊存入buffer中
+        replay_buffer.store_effect(last_idx, action, reward, done)
         
         if done:
             obs = env.reset()
@@ -171,7 +171,7 @@ def mario_learning(
             rew_batch = Variable(torch.from_numpy(rew_batch))
             next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype) / 255.0)
 
-            not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype) # 如果下一個state是episode中的最後一個，則done_mask = 1
+            not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype)
             hot_act_batch = Variable(torch.from_numpy(hot_act_batch)).type(dtype)
             next_hot_act_batch = Variable(torch.from_numpy(next_hot_act_batch)).type(dtype)
 
@@ -182,12 +182,12 @@ def mario_learning(
             if USE_CUDA:
                 act_batch = act_batch.cuda()
                 rew_batch = rew_batch.cuda()
-            # 從抽出的batch observation中得出現在的Q值
+
             if model == "DQN":
-                current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1).squeeze(1)) #TODO Why do we unsqueeze and sqeueeze here?
+                current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1)).squeeze(1)
                 next_max_q = target_Q(next_obs_batch).detach().max(1)[0]
             else:
-                current_Q_values = Q(hot_act_batch, obs_batch, last_obs_batch).gather(1, act_batch.unsqueeze(1).squeeze(1)) #TODO Why do we unsqueeze and sqeueeze here?
+                current_Q_values = Q(hot_act_batch, obs_batch, last_obs_batch).gather(1, act_batch.unsqueeze(1)).squeeze(1)
                 next_max_q = target_Q(next_hot_act_batch, next_obs_batch, last_obs_batch).detach().max(1)[0]
 
             next_Q_values = not_done_mask * next_max_q
