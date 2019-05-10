@@ -1,1 +1,3 @@
 video/*
+*.pyc
+__pycache__/

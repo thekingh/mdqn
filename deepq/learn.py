@@ -184,10 +184,10 @@ def mario_learning(
                 rew_batch = rew_batch.cuda()
             # 從抽出的batch observation中得出現在的Q值
             if model == "DQN":
-                current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1))
+                current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1).squeeze(1)) #TODO Why do we unsqueeze and sqeueeze here?
                 next_max_q = target_Q(next_obs_batch).detach().max(1)[0]
             else:
-                current_Q_values = Q(hot_act_batch, obs_batch, last_obs_batch).gather(1, act_batch.unsqueeze(1))
+                current_Q_values = Q(hot_act_batch, obs_batch, last_obs_batch).gather(1, act_batch.unsqueeze(1).squeeze(1)) #TODO Why do we unsqueeze and sqeueeze here?
                 next_max_q = target_Q(next_hot_act_batch, next_obs_batch, last_obs_batch).detach().max(1)[0]
 
             next_Q_values = not_done_mask * next_max_q
