@@ -1,3 +1,4 @@
 video/*
 *.pyc
 __pycache__/
+deepq/__pycache/*.pyc
