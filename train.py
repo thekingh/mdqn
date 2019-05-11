@@ -23,7 +23,7 @@ import argparse
 SEED = 12345
 BATCH_SIZE = 32
 GAMMA = 0.99
-REPLAY_BUFFER_SIZE = 1000000
+REPLAY_BUFFER_SIZE = 600000
 LEARNING_STARTS    = 50000
 LEARNING_FREQ      = 4 
 FRAME_HISTORY_LEN  = 4
@@ -36,7 +36,7 @@ def main(env, net):
     
     num_iterations = float(40000000) / 4.0
 
-    exploration_schedule = LinearSchedule(1000000, 0.1)
+    exploration_schedule = LinearSchedule(1000000, 0.15)
 
     OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
     optimizer = OptimizerSpec(
@@ -69,12 +69,16 @@ def main(env, net):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    # options: "DQN", "RobustDQN"
     parser.add_argument('--net', default='DQN', help='Select the net to use: DQN or RobustDQN')
     args = parser.parse_args()
+    print("args: ", args)
 
     env = gym_super_mario_bros.make('SuperMarioBros-1-1-v0')
+    print("env: SuperMarioBros-1-1-v0")
 
     env = BinarySpaceToDiscreteSpaceEnv(env, COMPLEX_MOVEMENT)
+    print("action space: complex movement")
 
     env.seed(SEED)
     torch.manual_seed(SEED)
@@ -82,8 +86,9 @@ if __name__ == '__main__':
 
     env = wrap_mario(env)
 
-    output_dir = 'video/baseline'
+    output_dir = 'video/rdqst1'
     env = wrappers.Monitor(env, output_dir, force=True, video_callable=lambda count: count % 10 == 0)
+    print("video out dir: ", output_dir)
 
     main(env, args.net)
 

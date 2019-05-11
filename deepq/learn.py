@@ -40,7 +40,7 @@ def mario_learning(
     model,
     optimizer_spec,
     exploration,
-    replay_buffer_size=1000000,
+    replay_buffer_size=600000,
     batch_size=32,
     gamma=0.99,
     learning_starts=50000,
@@ -125,7 +125,7 @@ def mario_learning(
     loss_arr = []
     reward_arr = []
     trial_progress = []
-    LEVEL_WIN_DIST = 3266
+    LEVEL_WIN_DIST = 3161
     
     for t in count():
 
@@ -179,6 +179,7 @@ def mario_learning(
             last_obs_reshape = last_obs.reshape(-1, 84, 84)
             last_obs_batch = np.concatenate([last_obs_reshape.copy() for i in range(batch_size)], 0)
             last_obs_batch = Variable(torch.from_numpy(last_obs_batch)).type(dtype)
+
             if USE_CUDA:
                 act_batch = act_batch.cuda()
                 rew_batch = rew_batch.cuda()
@@ -224,11 +225,11 @@ def mario_learning(
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
             
         if t % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
-            print("Timestep %d" % (t,))
-            print("mean reward (100 episodes) %f" % mean_episode_reward)
-            print("best mean reward %f" % best_mean_episode_reward)
-            print("episodes %d" % len(episode_rewards))
-            print("exploration %f" % exploration.value(t))
+            print("> Timestep: %d" % (t,))
+            print("> Mean reward (100 episodes): %f" % mean_episode_reward)
+            print("> Best mean reward: %f" % best_mean_episode_reward)
+            print("> Trials: %d" % len(episode_rewards))
+            print("> Exploration value: %f" % exploration.value(t))
             
             reward_arr.append(mean_episode_reward)
 

@@ -7,6 +7,7 @@ class RobustDQN(nn.Module):
 
     def __init__(self, in_channels=4, num_actions=18):
         super(RobustDQN, self).__init__()
+        print("Initializing RQDN...")
         #Previous Actions
         # 4*8. 4 states and 12 actions
         self.action_history = nn.Sequential(
