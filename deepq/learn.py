@@ -71,7 +71,6 @@ def mario_learning(
             obs = torch.from_numpy(obs).type(dtype).unsqueeze(0) / 255.0
             act_hot = torch.from_numpy(act_hot).type(dtype).unsqueeze(0)
             last_obs = torch.from_numpy(last_obs).type(dtype)
-
             if type(model).__name__ == "DQN":
                 with torch.no_grad():
                     return model(Variable(obs)).data.max(1)[1].cpu()
