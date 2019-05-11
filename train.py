@@ -14,6 +14,7 @@ import torch.optim as optim
 from deepq.learn import mario_learning
 from deepq.model import DQN
 from deepq.robust_model import RobustDQN
+from deepq.robust_stn_model import RobustSTN
 
 from common.atari_wrapper import wrap_mario
 from common.schedule import LinearSchedule
@@ -47,6 +48,9 @@ def main(env, net):
     if net == "DQN":
         q_func = DQN
         model = "DQN"
+    elif net == "RobustSTN":
+        q_func = RobustSTN
+        model = "RobustSTN"
     else:
         q_func = RobustDQN
         model = "RobustDQN"
@@ -70,7 +74,8 @@ def main(env, net):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # options: "DQN", "RobustDQN"
-    parser.add_argument('--net', default='DQN', help='Select the net to use: DQN or RobustDQN')
+    #parser.add_argument('--net', default='DQN', help='Select the net to use: DQN or RobustDQN')
+    parser.add_argument('--net', default='DQN', help='Select the net to use: DQN, RobustDQN, RobustSTN')
     args = parser.parse_args()
     print("args: ", args)
 
